@@ -1,0 +1,1 @@
+python psad_test_sg_3_rxOnly.py com65
