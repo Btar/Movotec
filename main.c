@@ -868,6 +868,7 @@ inline void StopStreaming(void) {
          UCB1SPI_SG_SendShutdownCommand();
          //sgGoOn = 0;
          P1IE &= ~BIT7;
+         P6OUT &= ~BIT6;       // SG_SW : P6.6
       }
 
       __delay_cycles(240000); //10ms (assuming 24MHz clock)
@@ -884,9 +885,6 @@ inline void StopStreaming(void) {
 
 
 uint8_t BtDataAvailable(uint8_t data) {
-
-   Board_ledToggle(PSAD_LED_1_R);// todo:
-
    if(waitingForArgs) {
       args[argsSize++] = data;
       if (((gAction == BT_SET_INFOMEM) && (argsSize == 1)) ||

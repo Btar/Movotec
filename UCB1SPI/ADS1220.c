@@ -76,14 +76,14 @@ void ADS1220Init(void)
    P6OUT |= BIT6;
 
    P6SEL &= ~BIT3;      // SG_CS_N: P6.3
-	// define initial states
-	P6OUT |= (ADS1220_CS); 					// CS_N is really 'not' CS, so it should be disabled high
+   // define initial states
+   P6OUT |= (ADS1220_CS); 					// CS_N is really 'not' CS, so it should be disabled high
    // define outputs
    P6DIR |= ADS1220_CS;
 	
-	// define inputs
-	P1DIR &= ~(ADS1220_DRDY);					// DRDY is an input to the micro
-	P1IES |= ADS1220_DRDY;						// and should be used as an interrupt to retrieve data
+   // define inputs
+   P1DIR &= ~(ADS1220_DRDY);					// DRDY is an input to the micro
+   P1IES |= ADS1220_DRDY;						// and should be used as an interrupt to retrieve data
    P1REN |= BIT7;
    P1OUT |= BIT7;
    P1IFG &= ~BIT7;
