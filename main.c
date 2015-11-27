@@ -715,9 +715,9 @@ void Init(void) {
    *i2cBicOnExit = 0;
    BT_set_i2c_bic_on_exit(i2cBicOnExit);
    BT_set_DMA0_bic_on_exit(&DMA0BicOnExit);
-
    BT_setStreamDataStatus(&streamData);
    BT_setCPUSleepStatus(&cpuIsSleeping);
+
    BT_init();
    BT_disableRemoteConfig(1);
    BT_setRadioMode(SLAVE_MODE);
@@ -884,6 +884,9 @@ inline void StopStreaming(void) {
 
 
 uint8_t BtDataAvailable(uint8_t data) {
+
+   Board_ledToggle(PSAD_LED_1_R);// todo:
+
    if(waitingForArgs) {
       args[argsSize++] = data;
       if (((gAction == BT_SET_INFOMEM) && (argsSize == 1)) ||
@@ -1429,7 +1432,7 @@ __interrupt void Port1_ISR(void)
    switch (__even_in_range(P1IV, P1IV_P1IFG7)) {
    //BT Connect/Disconnect
    case  P1IV_P1IFG0:   //BT Connect/Disconnect
-      if(P1IN & BIT0) {
+      /*if(P1IN & BIT0) {
          //BT is connected
          P1IES |= BIT0; //look for falling edge
          BT_connectionInterrupt(1);
@@ -1450,7 +1453,7 @@ __interrupt void Port1_ISR(void)
          //if(changeBtBaudRate != 0xFF) {
          //   __bic_SR_register_on_exit(LPM3_bits);
          //}
-      }
+      }*/
       break;
 
    //BT RTS
