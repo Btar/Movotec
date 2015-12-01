@@ -64,7 +64,7 @@ void UCB1SPI_EMG_offsetCal(void);
 void UCB1SPI_EMG_readData(uint8_t* buf);
 
 void UCB1SPI_EMG_dataReady();
-//==================================================
+//=============================== above is emg =============================
 
 void ucb1SetStreamData(uint8_t stream_Data);
 uint8_t ucb1RxIsr();

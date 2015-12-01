@@ -78,7 +78,7 @@ uint8_t slowRate;
 void initRN() {
    // powerup state is reset == low (true); mike conrad of roving networks sez:
    // wait about 1s to 2s after reset toggle
-   P6OUT |= BIT1;             //Shimmer3
+   P6OUT |= BIT1;             //PSAD BT_RST
    __delay_cycles(48000000);  //wait 2s (assuming 24MHz MCLK)
 
    //UART_RTS interrupt: RTS raises when BT has trans overflow
@@ -748,11 +748,11 @@ uint8_t BT_write(uint8_t *buf, uint8_t len) {
    }
 
    charsSent = 0;
-   uint16_t gie = __get_SR_register() & GIE; //Store current GIE state
-   __disable_interrupt();                    //Make this operation atomic
+   //uint16_t gie = __get_SR_register() & GIE; //Store current GIE state
+   //__disable_interrupt();                    //Make this operation atomic
    memcpy(messageBuffer, buf, len);
    messageLength = len;
-   __bis_SR_register(gie);                   //Restore original GIE state
+   //__bis_SR_register(gie);                   //Restore original GIE state
 
    if(!transmissionOverflow) {
       messageInProgress = 1;
@@ -1045,7 +1045,7 @@ __interrupt void USCI_A1_ISR(void) {
       if(!transmissionOverflow) {
          sendNextChar();
       }
-      if((*BT_streamData && *BT_cpuIsSleeping) || *BT_i2c_bic_on_exit || *BT_DMA0_bic_on_exit)
+      if(btConnected && ((*BT_streamData && *BT_cpuIsSleeping) || *BT_i2c_bic_on_exit || *BT_DMA0_bic_on_exit))
          __bic_SR_register_on_exit(LPM3_bits);
       break;
    default: break;

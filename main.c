@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, Shimmer Research, Ltd.
+ * Copyright (c) 2015, Shimmer Research, Ltd.
  * All rights reserved
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,8 +36,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @author Mike Healy
- * @date December, 2013
+ * @author Weibo Pan
+ * @date December, 2015
  */
 
 /***********************************************************************************
@@ -679,29 +679,8 @@ void Init(void) {
    cfgSgToShift = 0;
    syncRsp = 0;
    statusRsp = 0;
-   /*ddAcc1x = 0;
-   ddAcc1y = 100;
-   ddAcc1z = 200;
-   ddAcc2x = 300;
-   ddAcc2y = 400;
-   ddAcc2z = 500;
-   ddGyrox = 600;
-   ddGyroy = 700;
-   ddGyroz = 800;
-   ddSg1 = 900;
-   ddSg2 = 1000;
-   ddSg3 = 1100;
-   ddSg4 = 1200;
-   ddEmg1 = 1300;
-   ddEmg2 = 1400;*/
-
-   /*uint8_t i;
-   for (i=0;i<SYNC_STRING_LEN-1;i++)
-      syncString[i]=i+1;
-   syncString[SYNC_STRING_LEN-1]=0xff;*/
 
    battStat = BATT_HIGH;
-
    btIsConnected = 0;
    btIsPowerOn = 0;
    dataBuffTimer = 0;
@@ -711,13 +690,16 @@ void Init(void) {
    //Globally enable interrupts
    _enable_interrupts();
 
-   I2C_set_bic_on_exit(&i2cBicOnExit);
    *i2cBicOnExit = 0;
+   DMA0BicOnExit = 0;
+
+   I2C_set_bic_on_exit(&i2cBicOnExit);
    BT_set_i2c_bic_on_exit(i2cBicOnExit);
    BT_set_DMA0_bic_on_exit(&DMA0BicOnExit);
    BT_setStreamDataStatus(&streamData);
    BT_setCPUSleepStatus(&cpuIsSleeping);
 
+   //if((*BT_streamData && *BT_cpuIsSleeping) || *BT_i2c_bic_on_exit || *BT_DMA0_bic_on_exit)
    BT_init();
    BT_disableRemoteConfig(1);
    BT_setRadioMode(SLAVE_MODE);
@@ -764,8 +746,8 @@ void Init(void) {
    //Button_interruptEnable();
 
    //EXP_RESET_N
-   P3OUT &= ~BIT3;      //set low
-   P3DIR |= BIT3;       //set as output
+   //P3OUT &= ~BIT3;      //set low
+   //P3DIR |= BIT3;       //set as output
 
    StartTB0();
 
@@ -955,9 +937,9 @@ uint8_t BtDataAvailable(uint8_t data) {
          gAction = data;
          return 0;
       case BT_SET_SG_REGS:
-          waitingForArgs = 4;
-          gAction = data;
-          return 0;
+         waitingForArgs = 4;
+         gAction = data;
+         return 0;
       case BT_SET_EMG_CONFIG:
          waitingForArgs = 10;
          gAction = data;
@@ -1772,7 +1754,6 @@ __interrupt void TIMER0_B1_ISR(void) {
             BT_connectionInterrupt(1);
             waitingForArgs = 0;
          }
-         //Board_ledOn(PSAD_LED_1_Y);
       } else {
          if(btIsConnected){
             btIsConnected = 0;
@@ -1782,9 +1763,7 @@ __interrupt void TIMER0_B1_ISR(void) {
             }
             discTs = RTC_get64();
          }
-         //Board_ledOn(PSAD_LED_1_R);
       }
-
       ledCounter ++;
       if(ledCounter >= 20){
          ledCounter = 0;
@@ -1795,7 +1774,6 @@ __interrupt void TIMER0_B1_ISR(void) {
          if(psadConfig[NV_CONFIG_1] & CFG_AUTO_TURNOFF_EN){
             currentTs = RTC_get64();
             if(!btIsConnected && ((currentTs - discTs)>9830400)){
-            //if(!btIsConnected && ((currentTs - discTs)>327680)){
                P6DIR |= BIT5;
                P6OUT &= ~BIT5;
             }

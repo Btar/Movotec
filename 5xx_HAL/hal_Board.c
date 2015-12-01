@@ -58,41 +58,6 @@ void Board_init(void) {
    XT1_PORT_SEL |= XT1_ENABLE;
    XT2_PORT_SEL |= XT2_ENABLE;
 
-   // Configure button ports
-   //P1DIR &= ~BIT6;            //Button SW1 on P1.6 is input
-
-   //Radio regulator control SW_RADIO
-//   P8OUT &= ~BIT3;            //set low
-//   P8DIR |= BIT3;             //set as output
-//   //RADIO_CS_N
-//   //P8OUT &= ~BIT1;            //set low
-//   //P8DIR |= BIT1;             //set as output
-//   //RADIO_RESET_N
-//   P8OUT &= ~BIT2;            //set low
-//   P8DIR |= BIT2;             //set as output
-   //RADIO_SCLK_R
-   //P3OUT &= ~BIT6;            //set low
-   //P3DIR |= BIT6;             //set as output
-
-
-   //Battery voltage ADC pin as input
-   P6DIR &= ~BIT2;
-
-
-
-   //MAG_INT1 and MAG_DRDY as inputs
-   //P2DIR &= ~(BIT4 + BIT5);
-
-
-   //Analog Accel
-   //P8OUT &= ~BIT6;
-   //P8REN |= BIT6;             //enable pull down resistor
-   //P8DIR &= ~BIT6;            //SW_ACCEL set as input
-
-
-   //P6DIR &= ~(BIT3 + BIT4 + BIT5); //ACCEL_X/Y/Z input
-   //P6SEL |= BIT3 + BIT4 + BIT5;
-
    //FLASH_CS_N (same defaults as on Shimmer2r)
    P4OUT &= ~BIT0;            //set low
    P4DIR |= BIT0;             //set as output
@@ -172,7 +137,7 @@ void Board_init(void) {
    P8OUT &= ~BIT0;           //set low
    P8DIR |= BIT0;            //set as output
 
-   P8OUT &= ~(BIT6 + BIT5 + BIT4 + BIT3 + BIT2 );
+   P8OUT |= (BIT6 + BIT5 + BIT4 + BIT3 + BIT2 );
    P8DIR |= BIT6 + BIT5 + BIT4 + BIT3 + BIT2;
 
    // dock
@@ -180,10 +145,6 @@ void Board_init(void) {
    P8DIR &= ~BIT1;
    P8REN |= BIT1;             //enable pull up resistor
 
-   //RN42 ports
-   //BT power
-   P7OUT &= ~BIT4;            //set low
-   P7DIR |= BIT4;             //set as output
 
 
    P1DIR &= ~BIT4;            //sw1 in
@@ -196,21 +157,32 @@ void Board_init(void) {
    P6OUT |= BIT5;
    P6DIR |= BIT5;
 
-   //BT
+   //todo: Battery voltage ADC pin as input
+   //currently bt_status
+   P6DIR &= ~BIT2;
+   P6OUT &= ~BIT2;
+   P6REN |= BIT2;
+
+   //BT RN42 ports
+   //BT power
+   P7OUT &= ~BIT4;            //set low
+   P7DIR |= BIT4;             //set as output
    //UART_RTS and connect indication as input
    P1DIR &= ~BIT0;            //todo: not used yet, wants to be bt_status_int
    P2DIR &= ~BIT7;            //bt_rts, input
    //UART_CTS
    P2OUT &= ~BIT6;            //set low
    P2DIR |= BIT6;             //output
-   //Reset
+   //BT_Reset
    P6OUT &= ~BIT1;            //set low
    P6DIR |= BIT1;             //output
-   //Factory Reset
+   //BT_Factory Reset
    P6OUT &= ~BIT0;            //set low
    P6DIR |= BIT0;             //output
    //UART RX and TX
    P5SEL |= BIT6+BIT7;        //P5.6,P5.7 = USCI_A1 TXD/RXD
+   P5DIR |= BIT6;
+   P5DIR &= ~BIT7;
 
    //SG_DRDY as input
    P1DIR &= ~BIT7;
