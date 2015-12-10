@@ -699,14 +699,43 @@ void Init(void) {
    BT_setStreamDataStatus(&streamData);
    BT_setCPUSleepStatus(&cpuIsSleeping);
 
+
+   if(P6IN & BIT2) {
+      if(!btIsConnected){
+         btIsConnected = 1;
+         BT_connectionInterrupt(1);
+         waitingForArgs = 0;
+      }
+   } else {
+      if(btIsConnected){
+         btIsConnected = 0;
+         BT_connectionInterrupt(0);
+         if(sensing) {
+            stopSensing = 1;
+         }
+         discTs = RTC_get64();
+      }
+   }
+
+
    //if((*BT_streamData && *BT_cpuIsSleeping) || *BT_i2c_bic_on_exit || *BT_DMA0_bic_on_exit)
-   BT_init();
-   BT_disableRemoteConfig(1);
-   BT_setRadioMode(SLAVE_MODE);
-   BT_configure();
-   BT_receiveFunction(&BtDataAvailable);
-   BT_getMacAddress(btMac);
-   btIsPowerOn = 1;
+   uint8_t bt_started = 0;
+   while(!btIsPowerOn){
+	   BT_init();
+	   BT_disableRemoteConfig(1);
+	   BT_setRadioMode(SLAVE_MODE);
+	   if(P6IN & BIT2){//if connected, turn off and back on again
+		  btIsConnected = 0;               //set connect status to false
+		  BT_connectionInterrupt(0);
+		  BT_disable();                    //set bt disable, stop starting progress
+		  __delay_cycles(360000);
+		  continue;
+	   }
+	   BT_configure();
+	   BT_receiveFunction(&BtDataAvailable);
+	   BT_getMacAddress(btMac);
+	   btIsPowerOn = 1;
+   }
 
    // sw1
    if(P1IN & BIT4) {
