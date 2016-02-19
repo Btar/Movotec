@@ -137,9 +137,9 @@ void UCB1SPI_SG_dataRx_done(){
          ucb1spi_sgDataCnt = 0;
       }
       if(ucb1spi_sgDataCnt==0)
-         sg_next_channel = 0;
+         sg_next_channel = 8;
       else if(ucb1spi_sgDataCnt==1)
-         sg_next_channel = 5;
+         sg_next_channel = 9;
       else if(ucb1spi_sgDataCnt==2)
          sg_next_channel = 10;
       else if(ucb1spi_sgDataCnt==3)

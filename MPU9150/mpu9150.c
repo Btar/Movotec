@@ -45,18 +45,19 @@
 #include "mpu9150.h"
 
 //configure I2C
-void MPU9150_init(void) {
+void MPU9150_init(uint8_t dev) {
    uint8_t buf[2];
 
-   /*P7OUT |= BIT5;             //set SW_I2C high to power on all I2C chips
-   __delay_cycles(24000000);  //wait 1s (assuming 24MHz MCLK) to allow for power ramp up
-
-   I2C_Master_Init(S_MCLK,24000000,400000);  //Source from SMCLK, which is running @ 24MHz. 4kHz desired BRCLK
+//   P7OUT |= BIT5;             //set SW_I2C high to power on all I2C chips
+//   __delay_cycles(24000000);  //wait 1s (assuming 24MHz MCLK) to allow for power ramp up
+//
+//   I2C_Master_Init(S_MCLK,24000000,400000);  //Source from SMCLK, which is running @ 24MHz. 4kHz desired BRCLK
                                              //which is max for this part
    //put in I2C pass through mode so that mag can be accessed
-    *
-    */
-   I2C_Set_Slave_Address(MPU9150_ADDR);
+   if(!dev)
+      I2C_Set_Slave_Address(MPU9150_ADDR0);
+   else
+      I2C_Set_Slave_Address(MPU9150_ADDR1);
 
    *buf = USER_CTRL;
    buf[1] = 0;    //ensure I2C_MST_EN is 0
@@ -67,18 +68,26 @@ void MPU9150_init(void) {
    I2C_Write_Packet_To_Sensor(buf, 2);
 }
 
-uint8_t MPU9150_getId(void) {
+uint8_t MPU9150_getId(uint8_t dev) {
    uint8_t buf;
-   I2C_Set_Slave_Address(MPU9150_ADDR);
+//   I2C_Set_Slave_Address(MPU9150_ADDR);
+   if(!dev)
+      I2C_Set_Slave_Address(MPU9150_ADDR0);
+   else
+      I2C_Set_Slave_Address(MPU9150_ADDR1);
    buf = MPU9150_WHO_AM_I;
    I2C_Read_Packet_From_Sensor(&buf, 1);
    return buf;
 }
 
-void MPU9150_wake(uint8_t wakeup) {
+void MPU9150_wake(uint8_t wakeup, uint8_t dev) {
    uint8_t buf[2];
 
-   I2C_Set_Slave_Address(MPU9150_ADDR);
+//   I2C_Set_Slave_Address(MPU9150_ADDR);
+   if(!dev)
+      I2C_Set_Slave_Address(MPU9150_ADDR0);
+   else
+      I2C_Set_Slave_Address(MPU9150_ADDR1);
    *buf = MPU9150_PWR_MGMT_1;
    I2C_Read_Packet_From_Sensor(buf, 1);
 
@@ -93,12 +102,16 @@ void MPU9150_wake(uint8_t wakeup) {
    I2C_Write_Packet_To_Sensor(buf,2);
 }
 
-void MPU9150_getGyro(uint8_t *buf) {
-   I2C_Set_Slave_Address(MPU9150_ADDR);
+void MPU9150_getGyro(uint8_t *buf, uint8_t dev) {
+//   I2C_Set_Slave_Address(MPU9150_ADDR);
+   if(!dev)
+      I2C_Set_Slave_Address(MPU9150_ADDR0);
+   else
+      I2C_Set_Slave_Address(MPU9150_ADDR1);
    *buf = GYRO_XOUT_H;
    I2C_Read_Packet_From_Sensor(buf, 6);
 }
-void MPU9150_getGyroAxis(uint8_t *buf, uint8_t xyz) {
+void MPU9150_getGyroAxis(uint8_t *buf, uint8_t xyz, uint8_t dev) {
    if(xyz & MPU9150_X)
       *buf = GYRO_XOUT_H;
    else if(xyz & MPU9150_Y)
@@ -107,18 +120,26 @@ void MPU9150_getGyroAxis(uint8_t *buf, uint8_t xyz) {
       *buf = GYRO_ZOUT_H;
    else
       return;
-   I2C_Set_Slave_Address(MPU9150_ADDR);
+//   I2C_Set_Slave_Address(MPU9150_ADDR);
+   if(!dev)
+      I2C_Set_Slave_Address(MPU9150_ADDR0);
+   else
+      I2C_Set_Slave_Address(MPU9150_ADDR1);
    //*buf = ACCEL_XOUT_H;
    I2C_Read_Packet_From_Sensor(buf, 2);
 }
 
-void MPU9150_getAccel(uint8_t *buf) {
-   I2C_Set_Slave_Address(MPU9150_ADDR);
+void MPU9150_getAccel(uint8_t *buf, uint8_t dev) {
+//   I2C_Set_Slave_Address(MPU9150_ADDR);
+   if(!dev)
+      I2C_Set_Slave_Address(MPU9150_ADDR0);
+   else
+      I2C_Set_Slave_Address(MPU9150_ADDR1);
    *buf = ACCEL_XOUT_H;
    I2C_Read_Packet_From_Sensor(buf, 6);
 }
 
-void MPU9150_getAccelAxis(uint8_t *buf, uint8_t xyz) {
+void MPU9150_getAccelAxis(uint8_t *buf, uint8_t xyz, uint8_t dev) {
    if(xyz & MPU9150_X)
       *buf = ACCEL_XOUT_H;
    else if(xyz & MPU9150_Y)
@@ -127,15 +148,23 @@ void MPU9150_getAccelAxis(uint8_t *buf, uint8_t xyz) {
       *buf = ACCEL_ZOUT_H;
    else
       return;
-   I2C_Set_Slave_Address(MPU9150_ADDR);
+//   I2C_Set_Slave_Address(MPU9150_ADDR);
+   if(!dev)
+      I2C_Set_Slave_Address(MPU9150_ADDR0);
+   else
+      I2C_Set_Slave_Address(MPU9150_ADDR1);
    //*buf = ACCEL_XOUT_H;
    I2C_Read_Packet_From_Sensor(buf, 2);
 }
 
-void MPU9150_setGyroSensitivity(uint8_t val) {
+void MPU9150_setGyroSensitivity(uint8_t val, uint8_t dev) {
    uint8_t buf[2];
 
-   I2C_Set_Slave_Address(MPU9150_ADDR);
+//   I2C_Set_Slave_Address(MPU9150_ADDR);
+   if(!dev)
+      I2C_Set_Slave_Address(MPU9150_ADDR0);
+   else
+      I2C_Set_Slave_Address(MPU9150_ADDR1);
    *buf = GYRO_CONFIG;
    I2C_Read_Packet_From_Sensor(buf, 1);
 
@@ -149,10 +178,14 @@ void MPU9150_setGyroSensitivity(uint8_t val) {
    I2C_Write_Packet_To_Sensor(buf,2);
 }
 
-void MPU9150_setAccelRange(uint8_t val) {
+void MPU9150_setAccelRange(uint8_t val, uint8_t dev) {
    uint8_t buf[2];
 
-   I2C_Set_Slave_Address(MPU9150_ADDR);
+//   I2C_Set_Slave_Address(MPU9150_ADDR);
+   if(!dev)
+      I2C_Set_Slave_Address(MPU9150_ADDR0);
+   else
+      I2C_Set_Slave_Address(MPU9150_ADDR1);
    *buf = ACCEL_CONFIG;
    I2C_Read_Packet_From_Sensor(buf, 1);
 
@@ -166,10 +199,14 @@ void MPU9150_setAccelRange(uint8_t val) {
    I2C_Write_Packet_To_Sensor(buf,2);
 }
 
-void MPU9150_setSamplingRate(uint8_t sampleRateDiv) {
+void MPU9150_setSamplingRate(uint8_t sampleRateDiv, uint8_t dev) {
    uint8_t buf[2];
 
-   I2C_Set_Slave_Address(MPU9150_ADDR);
+//   I2C_Set_Slave_Address(MPU9150_ADDR);
+   if(!dev)
+      I2C_Set_Slave_Address(MPU9150_ADDR0);
+   else
+      I2C_Set_Slave_Address(MPU9150_ADDR1);
    *buf = MPU9150_SMPLRT_DIV;
 
    buf[1] = sampleRateDiv;

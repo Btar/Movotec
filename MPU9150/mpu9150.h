@@ -45,7 +45,8 @@
 
 #include <stdint.h>
 
-#define MPU9150_ADDR       0x68  //7 bit address I2C address of the MPU9150 accel and gyro
+#define MPU9150_ADDR0      0x68  //7 bit address I2C address of the MPU9150 accel and gyro
+#define MPU9150_ADDR1      0x69  //7 bit address I2C address of the MPU9150 accel and gyro
 #define MPU9150_MAG_ADDR   0x0C  //7 bit address I2C address of the MPU9150 mag
 
 //registers
@@ -83,30 +84,30 @@
 #define ASAY               0x11
 #define ASAZ               0x12
 
-void MPU9150_init(void);
+void MPU9150_init(uint8_t dev);
 
 //returns the ID
 //will always be 0x68
 //useful for checking communication
-uint8_t MPU9150_getId(void);
+uint8_t MPU9150_getId(uint8_t dev);
 
 
 //if wakeup is 0 puts MPU9150 to sleep
 //else wakes it up
-void MPU9150_wake(uint8_t wakeup);
+void MPU9150_wake(uint8_t wakeup, uint8_t dev);
 
 //put x, y and z gyro values into buf (big endian)
-void MPU9150_getGyro(uint8_t *buf);
+void MPU9150_getGyro(uint8_t *buf, uint8_t dev);
 
 #define MPU9150_X          0x04
 #define MPU9150_Y          0x02
 #define MPU9150_Z          0x01
-void MPU9150_getGyroAxis(uint8_t *buf, uint8_t xyz);
+void MPU9150_getGyroAxis(uint8_t *buf, uint8_t xyz, uint8_t dev);
 
 //put x, y and z accel values into buf (big endian)
-void MPU9150_getAccel(uint8_t *buf);
+void MPU9150_getAccel(uint8_t *buf, uint8_t dev);
 
-void MPU9150_getAccelAxis(uint8_t *buf, uint8_t xyz);
+void MPU9150_getAccelAxis(uint8_t *buf, uint8_t xyz, uint8_t dev);
 
 
 
@@ -116,7 +117,7 @@ void MPU9150_getAccelAxis(uint8_t *buf, uint8_t xyz);
 //2 = ±1000°/s
 //3 = ±2000°/s
 //else ±250°/s
-void MPU9150_setGyroSensitivity(uint8_t val);
+void MPU9150_setGyroSensitivity(uint8_t val, uint8_t dev);
 
 //val = sensitivity to set
 //0 = ±2G
@@ -124,12 +125,12 @@ void MPU9150_setGyroSensitivity(uint8_t val);
 //2 = ±8G
 //3 = ±16G
 //else ±2G
-void MPU9150_setAccelRange(uint8_t val);
+void MPU9150_setAccelRange(uint8_t val, uint8_t dev);
 
 //Set the sampling rate for the gyro and accel
 //Sampling Rate (Hz) = 8000/(sampleRateDiv+1)
 //Note, max output rate for accel is 1kHz
-void MPU9150_setSamplingRate(uint8_t sampleRateDiv);
+void MPU9150_setSamplingRate(uint8_t sampleRateDiv, uint8_t dev);
 
 //returns the ID of the mag
 //will always be 0x48

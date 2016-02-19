@@ -85,6 +85,13 @@ uint8_t tx_byte_ctr;
 * communication                                 
 * @return Return Values: None                                              
 **/
+void I2C_PowerOn(void) {
+   P7OUT |= BIT5;                       //set SW_I2C high to power on all I2C chips
+   __delay_cycles(24000000);                 //wait 1s (assuming 24MHz MCLK) to allow for power ramp up
+
+   I2C_Master_Init(S_MCLK,24000000,400000);  //Source from SMCLK, which is running @ 24MHz. 4kHz desired BRCLK
+}
+
 void I2C_Master_Init(uint8_t selectClockSource,
       uint32_t clockSourceFrequency, uint32_t desiredI2CClock) {
    // Disable the USCI Module

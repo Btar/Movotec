@@ -37,7 +37,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * @author Weibo Pan
- * @date December, 2015
+ * @date January, 2016
  */
 
 /***********************************************************************************
@@ -69,7 +69,7 @@
 #include "hal_InfoMem.h"
 #include "hal_TB0.h"
 #include "RN42.h"
-#include "lsm303dtr.h"
+//#include "lsm303dtr.h"
 #include "string.h"
 #include "mpu9150.h"
 //#include "exg.h"
@@ -111,7 +111,7 @@ void ConfigVBatt(void);
 uint8_t currentBuffer, processCommand, sendAck, startSensing, stopSensing, sensing, btIsConnected,btIsPowerOn,
       readBatt,streamData, sendResponse, emgConfigRsp, configuring, syncRsp, statusRsp, sgShiftRsp,
       infomemResponse, fwVersionRsp, configAllRsp, dataEmgRsp, dataAccelRsp, dataGyroRsp, dataSgRsp,
-      accelRangeRsp, gyroRangeRsp, autoOffEnRsp, standbyEnRsp, sgGainRsp, sgRegRsp, led3UserCtrl;
+      accelRangeRsp, gyroRangeRsp, autoOffEnRsp, standbyEnRsp, sgGainRsp, sgRegRsp, led3UserCtrl, a1CfgRsp;
 uint8_t gAction;
 uint8_t args[MAX_COMMAND_ARG_SIZE], waitingForArgs, argsSize;
 uint8_t resPacket[RESPONSE_PACKET_SIZE];
@@ -304,25 +304,314 @@ void main(void) {
       }
    }
 }
+void Init(void) {
+   // Stop WDT
+   //WDTCTL = WDTPW + WDTHOLD; // already handled in system_pre_init.c
+
+   Board_init();
+   Board_ledOn(LED_ALL);
+
+   // Set Vcore to accommodate for max. allowed system speed
+   SetVCore(3);
+
+   // Start 32.768kHz XTAL as ACLK
+   LFXT_Start(XT1DRIVE_0);
+
+   // Start 24MHz XTAL as MCLK and SMCLK
+   XT2_Start(XT2DRIVE_2);        // XT2DRIVE_2 or XTDRIVE_3 for 24MHz (userguide section 5.4.7)
+   UCSCTL4 |= SELS_5 + SELM_5;   // SMCLK=MCLK=XT2
+
+   SFRIFG1 = 0;                  // clear interrupt flag register
+   SFRIE1 |= OFIE;               // enable oscillator fault interrupt enable
+
+   RTC_init(0);
+   currentTs = discTs = 0;
+   sw2Press = 0;
+   sw2LastRelease = 0;
+
+   //sgGoOn = 0;
+   vibStatus = 0;
+   sw1New = sw2New = vibNew = 0;
+   sw1Cnt = sw2Cnt = vibCnt = 0;
+   led3UserCtrl = 0;
+   sgReadDataCnt = 0;
+   sendResponse = 0;
+   streamData = 0;
+   configuring = 0;
+   chargStatus = 0;
+   enterStandby = 0;
+   exitStandby = 1;
+   cpuIsSleeping = 0;
+   readBatt = 1;
+   sensing = 0;
+   currentBuffer = 0;
+   processCommand = 0;
+   sendAck = 0;
+   startSensing = 0;
+   stopSensing = 0;
+   //configureChannels = 0;
+   waitingForArgs = 0;
+   argsSize = 0;
+   nbrAdcChans = 0;
+   nbrDigiChans = 0;
+   preSampleMpuMag = 0;
+   mpu9150Initialised = 0;
+   preSampleBmpPress = 0;
+   sampleBmpTemp = 0;
+   docked = 0;
+   selectedLed = 0;
+   //uartProcessCmds = 0;
+   //uartSendResponses = 0;
+   fwVersionRsp = 0;
+   //vbattRsp = 0;
+   emgConfigRsp = 0;
+   configAllRsp = 0;
+   dataEmgRsp = 0;
+   dataAccelRsp = 0;
+   dataGyroRsp = 0;
+   dataSgRsp = 0;
+   accelRangeRsp = 0;
+   gyroRangeRsp = 0;
+   autoOffEnRsp = 0;
+   standbyEnRsp = 0;
+   infomemResponse = 0;
+   sgShiftRsp = 0;
+   sgGainRsp = 0;
+   sgRegRsp = 0;
+   a1CfgRsp = 0;
+   cfgSgToShift = 0;
+   syncRsp = 0;
+   statusRsp = 0;
+
+   battStat = BATT_HIGH;
+   btIsConnected = 0;
+   btIsPowerOn = 0;
+   dataBuffTimer = 0;
+   dataBuffCurrent = 0;
+
+
+   //Globally enable interrupts
+   _enable_interrupts();
+
+   *i2cBicOnExit = 0;
+   DMA0BicOnExit = 0;
+
+   I2C_set_bic_on_exit(&i2cBicOnExit);
+   BT_set_i2c_bic_on_exit(i2cBicOnExit);
+   BT_set_DMA0_bic_on_exit(&DMA0BicOnExit);
+   BT_setStreamDataStatus(&streamData);
+   BT_setCPUSleepStatus(&cpuIsSleeping);
+
+   //if((*BT_streamData && *BT_cpuIsSleeping) || *BT_i2c_bic_on_exit || *BT_DMA0_bic_on_exit)
+//   uint8_t bt_started = 0;
+   while(!btIsPowerOn){
+	   BT_init();
+	   BT_disableRemoteConfig(1);
+	   BT_setRadioMode(SLAVE_MODE);
+	   if(P1IN & BIT0){//if connected, turn off and back on again
+		  btIsConnected = 0;               //set connect status to false
+		  BT_connectionInterrupt(0);
+		  BT_disable();                    //set bt disable, stop starting progress
+		  __delay_cycles(360000);
+		  continue;
+	   }
+	   BT_configure();
+	   BT_receiveFunction(&BtDataAvailable);
+	   BT_getMacAddress(btMac);
+	   btIsPowerOn = 1;
+   }
+
+   // sw1
+   if(P1IN & BIT4) {
+      P1IES |= BIT4;    //look for falling edge
+      sw1Status = 0;
+   } else {
+      P1IES &= ~BIT4;   //look for rising edge
+      sw1Status = 1;
+   }
+   P1IFG &= ~BIT4;      //clear flag
+   P1IE |= BIT4;        //enable interrupt
+
+   //sw2
+   if(P2IN & BIT4) {
+      P2IES |= BIT4;    //look for falling edge
+      sw2Status = 0;
+   } else {
+      P2IES &= ~BIT4;   //look for rising edge
+      sw2Status = 1;
+   }
+   P2IFG &= ~BIT4;      //clear flag
+   P2IE |= BIT4;        //enable interrupt
+
+   // vibration
+   if(P2IN & BIT5) {
+      P2IES |= BIT5;    //look for falling edge
+      vibStatus = 0;
+   } else {
+      P2IES &= ~BIT5;   //look for rising edge
+      vibStatus = 1;
+   }
+   P2IFG &= ~BIT5;      //clear flag
+   P2IE |= BIT5;        //enable interrupt
+
+   // enable switch1 interrupt
+   //Button_init();
+   //Button_interruptEnable();
+
+   //EXP_RESET_N
+   //P3OUT &= ~BIT3;      //set low
+   //P3DIR |= BIT3;       //set as output
+
+   StartTB0();
+
+
+   Board_ledOff(LED_ALL);
+}
+
+
+inline void StartStreaming(void) {
+   //uint8_t offset;
+   if(!sensing) {
+
+      dataBuffTimer = 0;
+
+      if(cfgGyroEn || cfgAccelEn){
+         MPU9150_init(0);
+         MPU9150_wake(1, 0);
+         MPU9150_setSamplingRate(7, 0);
+         if(cfgGyroEn)
+            MPU9150_setGyroSensitivity(cfgGyroRange, 0);
+         if(cfgAccelEn){
+            MPU9150_setAccelRange(cfgAccelRange, 0);
+            MPU9150_init(1);
+            MPU9150_wake(1, 1);
+            MPU9150_setSamplingRate(7, 1);
+            MPU9150_setAccelRange(cfgAccelRange, 1);
+         }
+      }
+
+//      if(cfgAccelEn)
+//         LSM303DTR_accelInit(cfgAccel303Range, psadConfig+NV_A1_CFG);// range 10: data rate 1600Hz, selected range: default 0, zyx=7: all on.
+
+      if(cfgEmgEn || cfgStrainEn)
+         UCB1SPI_Init();
+      //ExG
+      if(cfgEmgEn) {
+         UCB1SPI_EMG_init();
+         //EXG_writeRegs(0, ADS1292R_CONFIG1, 10, (psadConfig+NV_EMG_1_CONFIG1));
+         UCB1SPI_EMG_writeRegs(ADS1292R_CONFIG1, 10, (psadConfig+NV_EMG_1_CONFIG1));
+         __delay_cycles(2400000);   //100ms (assuming 24MHz clock)
+         if(psadConfig[NV_EMG_1_RESP2] & BIT7)
+            UCB1SPI_EMG_offsetCal();
+         UCB1SPI_EMG_start();
+      }
+      if(cfgStrainEn) {
+         //sgGoOn = 1;
+         UCB1SPI_SG_init(psadConfig+NV_SG_REG0);
+         //cfgStrainGain
+         //UCB1SPI_SG_SetGain(cfgStrainGain);
+         UCB1SPI_SG_SendStartCommand();
+      }
+
+      if(cfgEmgEn){
+         P2IE |= BIT0;  //enable interrupt
+      }
+      if(cfgStrainEn) {
+         P1IE |= BIT7;
+      }
+
+
+      SampleTimerStart();
+      BlinkTimerStart();      //Needs to go after SampleTimerStart(), as TBR is reset in SampleTimerStart()
+      sensing = 1;
+   }
+}
+
+uint8_t p17ie, p20ie, ucb1Rxie;
+void SaveSpiOff(){
+   //p20ie = P2IE & BIT0;
+   //p17ie = P1IE & BIT7;
+   //ucb1Rxie = UCB1IE & UCRXIE;
+
+   TB0CCTL4 &= ~CCIE;
+   //P2IE &= ~BIT0;
+   //P1IE &= ~BIT7;
+   //UCB1IE &= ~UCRXIE;
+}
+void LoadSpiOn(){
+   TB0CCTL4 |= CCIE;
+   //P2IE |= p20ie;  //enable interrupt
+   //P1IE |= p17ie;
+   //UCB1IE |= ucb1Rxie;
+}
+
+inline void StopStreaming(void) {
+   if(sensing) {
+      sensing = 0;
+      SampleTimerStop();
+      //ADC_disable();
+      //DMA0_disable();
+
+      if(cfgAccelEn || cfgGyroEn){
+//         MPU9150_wake(0);
+         MPU9150_wake(0, 0);
+         MPU9150_wake(0, 1);
+      }
+//      if(cfgAccelEn)
+//         LSM303DTR_sleep();
+
+      if(cfgEmgEn) {
+         //EXG_stop(0);         //probably not needed
+         //EXG_powerOff();
+         UCB1SPI_EMG_stop();
+         P2IE &= ~BIT0;
+      }
+
+      if(cfgStrainEn) {
+         UCB1SPI_SG_SendShutdownCommand();
+         //sgGoOn = 0;
+         P1IE &= ~BIT7;
+         P6OUT &= ~BIT6;       // SG_SW : P6.6
+      }
+
+      __delay_cycles(240000); //10ms (assuming 24MHz clock)
+                              //give plenty of time for I2C operations to finish before disabling I2C
+      //I2C_Disable();
+      //P7OUT &= ~BIT5;         //set SW_I2C low to power off I2C chips
+
+      //if(btIsConnected)
+      //   BlinkTimerStop();
+      //preSampleMpuMag = 0;
+      //preSampleBmpPress = 0;
+   }
+}
+
 
 void GetEmgFromSensor(uint8_t * dbuff){
    UCB1SPI_EMG_readData(dbuff);
 }
 void GetAccel1FromSensor(uint8_t * dbuff){
+   uint8_t temp[6];
    uint8_t data_accel_cnt;
    data_accel_cnt = dataBuffCurrent & 0x03;
    SaveSpiOff();
    if(cfgAccelCnt == 2)
-      LSM303DTR_getAccelAxis(dbuff+4, LSM303DTR_Z);
+      MPU9150_getAccelAxis(temp+4, MPU9150_Z, 1);
    else if(cfgAccelCnt == 1){
-      LSM303DTR_getAccelAxis(dbuff, LSM303DTR_X);
+      MPU9150_getAccelAxis(temp, MPU9150_X, 1);
       if(data_accel_cnt == 0)
-         LSM303DTR_getAccelAxis(dbuff+2, LSM303DTR_Y);
+         MPU9150_getAccelAxis(temp+2, MPU9150_Y, 1);
       else if(data_accel_cnt == 1)
-         LSM303DTR_getAccelAxis(dbuff+4, LSM303DTR_Z);
+         MPU9150_getAccelAxis(temp+4, MPU9150_Z, 1);
    }
    else
-      LSM303DTR_getAccel(dbuff);
+      MPU9150_getAccel(temp, 1);
+   dbuff[0] = temp[1];
+   dbuff[1] = temp[0];
+   dbuff[2] = temp[3];
+   dbuff[3] = temp[2];
+   dbuff[4] = temp[5];
+   dbuff[5] = temp[4];
    LoadSpiOn();
 }
 
@@ -332,16 +621,16 @@ void GetAccel2FromSensor(uint8_t * dbuff){
    data_accel_cnt = dataBuffCurrent & 0x03;
    SaveSpiOff();
    if(cfgAccelCnt == 2)
-      MPU9150_getAccelAxis(temp+4, MPU9150_Z);
+      MPU9150_getAccelAxis(temp+4, MPU9150_Z, 0);
    else if(cfgAccelCnt == 1){
-      MPU9150_getAccelAxis(temp+4, MPU9150_Z);
+      MPU9150_getAccelAxis(temp+4, MPU9150_Z, 0);
       if(data_accel_cnt == 2)
-         MPU9150_getAccelAxis(temp, MPU9150_X);
+         MPU9150_getAccelAxis(temp, MPU9150_X, 0);
       else if(data_accel_cnt == 3)
-         MPU9150_getAccelAxis(temp+2, MPU9150_Y);
+         MPU9150_getAccelAxis(temp+2, MPU9150_Y, 0);
    }
    else
-      MPU9150_getAccel(temp);
+      MPU9150_getAccel(temp, 0);
    dbuff[0] = temp[1];
    dbuff[1] = temp[0];
    dbuff[2] = temp[3];
@@ -356,18 +645,18 @@ void GetGyroFromSensor(uint8_t * dbuff){
    uint8_t temp[6];
    SaveSpiOff();
    if(cfgGyroCnt == 2)
-      MPU9150_getGyroAxis(temp+2, MPU9150_Y);
+      MPU9150_getGyroAxis(temp+2, MPU9150_Y, 0);
    else if(cfgGyroCnt == 1){
       data_gyro_cnt = dataBuffCurrent & 0x01;
-      MPU9150_getGyroAxis(temp, MPU9150_X);
+      MPU9150_getGyroAxis(temp, MPU9150_X, 0);
       if(!data_gyro_cnt){
-         MPU9150_getGyroAxis(temp+2, MPU9150_Y);
+         MPU9150_getGyroAxis(temp+2, MPU9150_Y, 0);
       }else{
-         MPU9150_getGyroAxis(temp+4, MPU9150_Z);
+         MPU9150_getGyroAxis(temp+4, MPU9150_Z, 0);
       }
    }
    else
-      MPU9150_getGyro(temp);
+      MPU9150_getGyro(temp, 0);
    dbuff[0] = temp[1];
    dbuff[1] = temp[0];
    dbuff[2] = temp[3];
@@ -407,9 +696,9 @@ void GetStrainFromSensor(uint8_t * dbuff, uint8_t len){
 }
 
 void PSAD_setDefaultConfig(void){
-   psadConfig[NV_CONFIG_0] = 0x00; //
-   psadConfig[NV_CONFIG_1] = 0x03; // AUTO_TURNOFF_EN + AUTO_STANDBY_EN + ACCEL_2g + GYRO_250dps
-   psadConfig[NV_CONFIG_2] = 0x40;
+   psadConfig[NV_CONFIG_0] = 0x10; // sg at half speed
+   psadConfig[NV_CONFIG_1] = 0x27; // AUTO_TURNOFF_EN + AUTO_STANDBY_EN + ACCEL_4g + GYRO_1000dps
+   psadConfig[NV_CONFIG_2] = 0x41; // 8bits shift, gain=2
 
    // default emg setting
    /*psadConfig[NV_EMG_1_CONFIG1] = 0x04;
@@ -435,11 +724,14 @@ void PSAD_setDefaultConfig(void){
    psadConfig[NV_EMG_1_RESP1] = 0x02;
    psadConfig[NV_EMG_1_RESP2] = 0x01;
 
-   psadConfig[NV_SG_REG0] = 0x01;
+   psadConfig[NV_SG_REG0] = 0x03;
    psadConfig[NV_SG_REG1] = 0xd0;
    psadConfig[NV_SG_REG2] = 0x00;
    psadConfig[NV_SG_REG3] = 0x00;
 
+   //#      |7    |6       |5       |4    |3  2  1  0
+   //content|BDU  |ABW[1]  |ABW[0]  |AFDS |
+   psadConfig[NV_A1_CFG] = 0x00;
 
    InfoMem_write((void*)0, psadConfig, NV_CONFIG_LEN);
 
@@ -602,298 +894,6 @@ void GetStrain(uint8_t * ptr){
       // off
    }
 }
-void Init(void) {
-   // Stop WDT
-   //WDTCTL = WDTPW + WDTHOLD; // already handled in system_pre_init.c
-
-   Board_init();
-   Board_ledOn(LED_ALL);
-
-   // Set Vcore to accommodate for max. allowed system speed
-   SetVCore(3);
-
-   // Start 32.768kHz XTAL as ACLK
-   LFXT_Start(XT1DRIVE_0);
-
-   // Start 24MHz XTAL as MCLK and SMCLK
-   XT2_Start(XT2DRIVE_2);        // XT2DRIVE_2 or XTDRIVE_3 for 24MHz (userguide section 5.4.7)
-   UCSCTL4 |= SELS_5 + SELM_5;   // SMCLK=MCLK=XT2
-
-   SFRIFG1 = 0;                  // clear interrupt flag register
-   SFRIE1 |= OFIE;               // enable oscillator fault interrupt enable
-
-   RTC_init(0);
-   currentTs = discTs = 0;
-   sw2Press = 0;
-   sw2LastRelease = 0;
-
-   //sgGoOn = 0;
-   vibStatus = 0;
-   sw1New = sw2New = vibNew = 0;
-   sw1Cnt = sw2Cnt = vibCnt = 0;
-   led3UserCtrl = 0;
-   sgReadDataCnt = 0;
-   sendResponse = 0;
-   streamData = 0;
-   configuring = 0;
-   chargStatus = 0;
-   enterStandby = 0;
-   exitStandby = 1;
-   cpuIsSleeping = 0;
-   readBatt = 1;
-   sensing = 0;
-   currentBuffer = 0;
-   processCommand = 0;
-   sendAck = 0;
-   startSensing = 0;
-   stopSensing = 0;
-   //configureChannels = 0;
-   waitingForArgs = 0;
-   argsSize = 0;
-   nbrAdcChans = 0;
-   nbrDigiChans = 0;
-   preSampleMpuMag = 0;
-   mpu9150Initialised = 0;
-   preSampleBmpPress = 0;
-   sampleBmpTemp = 0;
-   docked = 0;
-   selectedLed = 0;
-   //uartProcessCmds = 0;
-   //uartSendResponses = 0;
-   fwVersionRsp = 0;
-   //vbattRsp = 0;
-   emgConfigRsp = 0;
-   configAllRsp = 0;
-   dataEmgRsp = 0;
-   dataAccelRsp = 0;
-   dataGyroRsp = 0;
-   dataSgRsp = 0;
-   accelRangeRsp = 0;
-   gyroRangeRsp = 0;
-   autoOffEnRsp = 0;
-   standbyEnRsp = 0;
-   infomemResponse = 0;
-   sgShiftRsp = 0;
-   sgGainRsp = 0;
-   sgRegRsp = 0;
-   cfgSgToShift = 0;
-   syncRsp = 0;
-   statusRsp = 0;
-
-   battStat = BATT_HIGH;
-   btIsConnected = 0;
-   btIsPowerOn = 0;
-   dataBuffTimer = 0;
-   dataBuffCurrent = 0;
-
-
-   //Globally enable interrupts
-   _enable_interrupts();
-
-   *i2cBicOnExit = 0;
-   DMA0BicOnExit = 0;
-
-   I2C_set_bic_on_exit(&i2cBicOnExit);
-   BT_set_i2c_bic_on_exit(i2cBicOnExit);
-   BT_set_DMA0_bic_on_exit(&DMA0BicOnExit);
-   BT_setStreamDataStatus(&streamData);
-   BT_setCPUSleepStatus(&cpuIsSleeping);
-
-
-   if(P6IN & BIT2) {
-      if(!btIsConnected){
-         btIsConnected = 1;
-         BT_connectionInterrupt(1);
-         waitingForArgs = 0;
-      }
-   } else {
-      if(btIsConnected){
-         btIsConnected = 0;
-         BT_connectionInterrupt(0);
-         if(sensing) {
-            stopSensing = 1;
-         }
-         discTs = RTC_get64();
-      }
-   }
-
-
-   //if((*BT_streamData && *BT_cpuIsSleeping) || *BT_i2c_bic_on_exit || *BT_DMA0_bic_on_exit)
-   uint8_t bt_started = 0;
-   while(!btIsPowerOn){
-	   BT_init();
-	   BT_disableRemoteConfig(1);
-	   BT_setRadioMode(SLAVE_MODE);
-	   if(P6IN & BIT2){//if connected, turn off and back on again
-		  btIsConnected = 0;               //set connect status to false
-		  BT_connectionInterrupt(0);
-		  BT_disable();                    //set bt disable, stop starting progress
-		  __delay_cycles(360000);
-		  continue;
-	   }
-	   BT_configure();
-	   BT_receiveFunction(&BtDataAvailable);
-	   BT_getMacAddress(btMac);
-	   btIsPowerOn = 1;
-   }
-
-   // sw1
-   if(P1IN & BIT4) {
-      P1IES |= BIT4;    //look for falling edge
-      sw1Status = 0;
-   } else {
-      P1IES &= ~BIT4;   //look for rising edge
-      sw1Status = 1;
-   }
-   P1IFG &= ~BIT4;      //clear flag
-   P1IE |= BIT4;        //enable interrupt
-
-   //sw2
-   if(P2IN & BIT4) {
-      P2IES |= BIT4;    //look for falling edge
-      sw2Status = 0;
-   } else {
-      P2IES &= ~BIT4;   //look for rising edge
-      sw2Status = 1;
-   }
-   P2IFG &= ~BIT4;      //clear flag
-   P2IE |= BIT4;        //enable interrupt
-
-   // vibration
-   if(P2IN & BIT5) {
-      P2IES |= BIT5;    //look for falling edge
-      vibStatus = 0;
-   } else {
-      P2IES &= ~BIT5;   //look for rising edge
-      vibStatus = 1;
-   }
-   P2IFG &= ~BIT5;      //clear flag
-   P2IE |= BIT5;        //enable interrupt
-
-   // enable switch1 interrupt
-   //Button_init();
-   //Button_interruptEnable();
-
-   //EXP_RESET_N
-   //P3OUT &= ~BIT3;      //set low
-   //P3DIR |= BIT3;       //set as output
-
-   StartTB0();
-
-
-   Board_ledOff(LED_ALL);
-}
-
-
-inline void StartStreaming(void) {
-   //uint8_t offset;
-   if(!sensing) {
-
-      dataBuffTimer = 0;
-
-      if(cfgGyroEn || cfgAccelEn){
-         MPU9150_init();
-         MPU9150_wake(1);
-         MPU9150_setSamplingRate(7);
-         if(cfgGyroEn)
-            MPU9150_setGyroSensitivity(cfgGyroRange);
-         if(cfgAccelEn)
-            MPU9150_setAccelRange(cfgAccelRange);
-      }
-
-      if(cfgAccelEn)
-         LSM303DTR_accelInit(10, cfgAccel303Range, 7);// range 10: data rate 1600Hz, selected range: default 0, zyx=7: all on.
-
-      if(cfgEmgEn || cfgStrainEn)
-         UCB1SPI_Init();
-      //ExG
-      if(cfgEmgEn) {
-         UCB1SPI_EMG_init();
-         //EXG_writeRegs(0, ADS1292R_CONFIG1, 10, (psadConfig+NV_EMG_1_CONFIG1));
-         UCB1SPI_EMG_writeRegs(ADS1292R_CONFIG1, 10, (psadConfig+NV_EMG_1_CONFIG1));
-         __delay_cycles(2400000);   //100ms (assuming 24MHz clock)
-         if(psadConfig[NV_EMG_1_RESP2] & BIT7)
-            UCB1SPI_EMG_offsetCal();
-         UCB1SPI_EMG_start();
-      }
-      if(cfgStrainEn) {
-         //sgGoOn = 1;
-         UCB1SPI_SG_init(psadConfig+NV_SG_REG0);
-         //cfgStrainGain
-         //UCB1SPI_SG_SetGain(cfgStrainGain);
-         UCB1SPI_SG_SendStartCommand();
-      }
-
-      if(cfgEmgEn){
-         P2IE |= BIT0;  //enable interrupt
-      }
-      if(cfgStrainEn) {
-         P1IE |= BIT7;
-      }
-
-
-      SampleTimerStart();
-      BlinkTimerStart();      //Needs to go after SampleTimerStart(), as TBR is reset in SampleTimerStart()
-      sensing = 1;
-   }
-}
-
-uint8_t p17ie, p20ie, ucb1Rxie;
-void SaveSpiOff(){
-   //p20ie = P2IE & BIT0;
-   //p17ie = P1IE & BIT7;
-   //ucb1Rxie = UCB1IE & UCRXIE;
-
-   TB0CCTL4 &= ~CCIE;
-   //P2IE &= ~BIT0;
-   //P1IE &= ~BIT7;
-   //UCB1IE &= ~UCRXIE;
-}
-void LoadSpiOn(){
-   TB0CCTL4 |= CCIE;
-   //P2IE |= p20ie;  //enable interrupt
-   //P1IE |= p17ie;
-   //UCB1IE |= ucb1Rxie;
-}
-
-inline void StopStreaming(void) {
-   if(sensing) {
-      sensing = 0;
-      SampleTimerStop();
-      //ADC_disable();
-      //DMA0_disable();
-
-      if(cfgAccelEn || cfgGyroEn)
-         MPU9150_wake(0);
-      if(cfgAccelEn)
-         LSM303DTR_sleep();
-
-      if(cfgEmgEn) {
-         //EXG_stop(0);         //probably not needed
-         //EXG_powerOff();
-         UCB1SPI_EMG_stop();
-         P2IE &= ~BIT0;
-      }
-
-      if(cfgStrainEn) {
-         UCB1SPI_SG_SendShutdownCommand();
-         //sgGoOn = 0;
-         P1IE &= ~BIT7;
-         P6OUT &= ~BIT6;       // SG_SW : P6.6
-      }
-
-      __delay_cycles(240000); //10ms (assuming 24MHz clock)
-                              //give plenty of time for I2C operations to finish before disabling I2C
-      //I2C_Disable();
-      //P7OUT &= ~BIT5;         //set SW_I2C low to power off I2C chips
-
-      //if(btIsConnected)
-      //   BlinkTimerStop();
-      //preSampleMpuMag = 0;
-      //preSampleBmpPress = 0;
-   }
-}
-
 
 uint8_t BtDataAvailable(uint8_t data) {
    if(waitingForArgs) {
@@ -937,6 +937,7 @@ uint8_t BtDataAvailable(uint8_t data) {
       case BT_GET_SG_BITSHIFT:
       case BT_GET_SG_GAIN:
       case BT_GET_SG_REGS:
+      case BT_GET_A1_CFG:
          gAction = data;
          processCommand = 1;
          return 1;
@@ -951,6 +952,7 @@ uint8_t BtDataAvailable(uint8_t data) {
       case BT_SET_SG_BITSHIFT:
       case BT_SET_SG_GAIN:
       case BT_LED3_SET_USERCTRL:
+      case BT_SET_A1_CFG:
          waitingForArgs = 1;
          gAction = data;
          return 0;
@@ -1160,11 +1162,11 @@ void ProcessCommand(void) {
       break;
    case BT_SET_SG_GAIN:
       if(args[0]<8){// arg = 0-7, gain = 1-128
-         //psadConfig[NV_CONFIG_2] &= 0xf8;
-         //psadConfig[NV_CONFIG_2] |= args[0];
+         psadConfig[NV_CONFIG_2] &= 0xf8;
+         psadConfig[NV_CONFIG_2] |= args[0];
+         InfoMem_write((uint8_t*)(NV_CONFIG_2), (psadConfig+NV_CONFIG_2), 1);
          psadConfig[NV_SG_REG0] &= 0xf1;
          psadConfig[NV_SG_REG0] |= args[0]<<1;
-         //InfoMem_write((uint8_t*)(NV_CONFIG_2), (psadConfig+NV_CONFIG_2), 1);
          InfoMem_write((uint8_t*)(NV_SG_REG0), (psadConfig+NV_SG_REG0), 1);
       }
       // todo: find a place (4 bits) in infomem for this value
@@ -1181,6 +1183,13 @@ void ProcessCommand(void) {
 	  psadConfig[NV_SG_REG2] = args[2];
 	  psadConfig[NV_SG_REG3] = args[3];
 	  InfoMem_write((uint8_t*)(NV_SG_REG0), (psadConfig+NV_SG_REG0), 4);
+      break;
+   case BT_GET_A1_CFG:
+      a1CfgRsp = 1;
+      break;
+   case BT_SET_A1_CFG:
+     psadConfig[NV_A1_CFG] = args[0];
+     InfoMem_write((uint8_t*)(NV_A1_CFG), (psadConfig+NV_A1_CFG), 1);
       break;
 
    default:break;
@@ -1318,6 +1327,11 @@ void SendResponse(void) {
          *(resPacket + packet_length++) = psadConfig[NV_SG_REG3];
          sgRegRsp = 0;
       }
+      if(a1CfgRsp) {
+         *(resPacket + packet_length++) = BT_RSP_A1_CFG;
+         *(resPacket + packet_length++) = psadConfig[NV_A1_CFG];
+         a1CfgRsp = 0;
+      }
 
 
    }
@@ -1374,7 +1388,8 @@ void EnterStandby(void){
 }
 
 void ExitStandby(void){
-   LSM303DTR_init();
+//   LSM303DTR_init();
+   I2C_PowerOn();
 }
 
 
@@ -1441,14 +1456,13 @@ __interrupt void Port1_ISR(void)
    switch (__even_in_range(P1IV, P1IV_P1IFG7)) {
    //BT Connect/Disconnect
    case  P1IV_P1IFG0:   //BT Connect/Disconnect
-      /*if(P1IN & BIT0) {
+      if(P1IN & BIT0) {
          //BT is connected
          P1IES |= BIT0; //look for falling edge
          BT_connectionInterrupt(1);
          btIsConnected = 1;
-         BlinkTimerStop();
+//         BlinkTimerStop();
          waitingForArgs = 0;
-         //Board_ledOn(PSAD_LED_2_B);
       } else {
          //BT is not connected
          P1IES &= ~BIT0; //look for rising edge
@@ -1457,12 +1471,9 @@ __interrupt void Port1_ISR(void)
          if(sensing) {
             stopSensing = 1;
          }
-         //Board_ledOff(LED_BLUE);
-         BlinkTimerStart();
-         //if(changeBtBaudRate != 0xFF) {
-         //   __bic_SR_register_on_exit(LPM3_bits);
-         //}
-      }*/
+         discTs = RTC_get64();
+//         BlinkTimerStart();
+      }
       break;
 
    //BT RTS
@@ -1585,6 +1596,16 @@ __interrupt void Port2_ISR(void) {
 
    case P2IV_P2IFG6:
       _NOP();
+      break;
+
+   case P2IV_P2IFG7:
+      if(P2IN & BIT7) {
+         P2IES |= BIT7;    //look for falling edge
+         BT_rtsInterrupt(1);
+      } else {
+         P2IES &= ~BIT7;   //look for rising edge
+         BT_rtsInterrupt(0);
+      }
       break;
    // Default case
    default: break;
@@ -1719,10 +1740,10 @@ void BlinkTimerStart(void) {
    TB0CCTL4 = CCIE;
 }
 
-inline void BlinkTimerStop() {
-   TB0CCTL4 = 0;
-   //Board_ledOn(LED_BLUE);
-}
+//inline void BlinkTimerStop() {
+//   TB0CCTL4 = 0;
+//   //Board_ledOn(LED_BLUE);
+//}
 
 /**
 *** Sample Timer
@@ -1776,23 +1797,23 @@ __interrupt void TIMER0_B1_ISR(void) {
    case  8:                               // TB0CCR4
 
       TB0CCR4 += ACLK_100ms;
-
-      if(P6IN & BIT2) {
-         if(!btIsConnected){
-            btIsConnected = 1;
-            BT_connectionInterrupt(1);
-            waitingForArgs = 0;
-         }
-      } else {
-         if(btIsConnected){
-            btIsConnected = 0;
-            BT_connectionInterrupt(0);
-            if(sensing) {
-               stopSensing = 1;
-            }
-            discTs = RTC_get64();
-         }
-      }
+//
+//      if(P6IN & BIT2) {
+//         if(!btIsConnected){
+//            btIsConnected = 1;
+//            BT_connectionInterrupt(1);
+//            waitingForArgs = 0;
+//         }
+//      } else {
+//         if(btIsConnected){
+//            btIsConnected = 0;
+//            BT_connectionInterrupt(0);
+//            if(sensing) {
+//               stopSensing = 1;
+//            }
+//            discTs = RTC_get64();
+//         }
+//      }
       ledCounter ++;
       if(ledCounter >= 20){
          ledCounter = 0;

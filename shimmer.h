@@ -36,8 +36,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * @author Mike Healy
- * @date December, 2013
+ * @author Weibo Pan
+ * @date January, 2016
  */
 
 
@@ -49,7 +49,7 @@
 #define FW_IDENTIFIER   8     //Two byte firmware identifier number
 #define FW_VER_MAJOR    0     //Major version number: 0-65535
 #define FW_VER_MINOR    0     //Minor version number: 0-255
-#define FW_VER_REL      25     //Release candidate version number: 0-255
+#define FW_VER_REL      26     //Release candidate version number: 0-255
 
 
 // Packet Types
@@ -115,6 +115,9 @@
 #define  BT_SET_SG_REGS          0x3A
 #define  BT_GET_SG_REGS          0x3B
 #define  BT_RSP_SG_REGS          0x3C
+#define  BT_SET_A1_CFG           0x3D
+#define  BT_GET_A1_CFG           0x3E
+#define  BT_RSP_A1_CFG           0x3F
 
 #define NV_NUM_RWMEM_BYTES                512
 
@@ -157,8 +160,9 @@
 #define NV_SG_REG1               14
 #define NV_SG_REG2               15
 #define NV_SG_REG3               16
+#define NV_A1_CFG                17
 
-#define NV_CONFIG_LEN            (NV_SG_REG3+1)
+#define NV_CONFIG_LEN            (NV_A1_CFG+1)
 
 
 

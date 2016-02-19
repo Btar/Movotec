@@ -101,7 +101,6 @@ void Board_init(void) {
    //GPIO_EXTERNAL_RADIO_DD
    P1DIR &= ~BIT5;
 
-
    // ================================
    // ================================
    //uca0 - pc_uart: p3.4 rx, p3.5 rx
@@ -120,7 +119,7 @@ void Board_init(void) {
    //Make the 2 CHG_STAT pins input
    P2DIR &= ~(BIT2 + BIT3);
    P2REN |= (BIT2 + BIT3);
-   P2REN &= ~(BIT2 + BIT3);
+   P2OUT &= ~(BIT2 + BIT3);
 
    //SW_I2C todo: change pins
    P7OUT &= ~BIT5;           //set low
@@ -160,15 +159,18 @@ void Board_init(void) {
    //todo: Battery voltage ADC pin as input
    //currently bt_status
    P6DIR &= ~BIT2;
-   P6OUT &= ~BIT2;
-   P6REN |= BIT2;
+   //P6OUT &= ~BIT2;
+   //P6REN |= BIT2;
+   P6SEL |= BIT2;
 
    //BT RN42 ports
    //BT power
    P7OUT &= ~BIT4;            //set low
    P7DIR |= BIT4;             //set as output
    //UART_RTS and connect indication as input
-   P1DIR &= ~BIT0;            //todo: not used yet, wants to be bt_status_int
+   P1DIR &= ~BIT0;            //bt_status_int
+   P1OUT &= ~BIT0;
+   P1REN |= BIT0;
    P2DIR &= ~BIT7;            //bt_rts, input
    //UART_CTS
    P2OUT &= ~BIT6;            //set low

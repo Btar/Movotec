@@ -66,6 +66,8 @@
 #define RET_ERR         0
 
 // Global Functions
+
+extern void I2C_PowerOn(void);
 extern void I2C_Master_Init(uint8_t selectClockSource,
                uint32_t clockSourceFrequency,
                uint32_t desiredI2CClock);
