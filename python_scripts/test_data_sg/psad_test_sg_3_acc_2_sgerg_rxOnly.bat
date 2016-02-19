@@ -1,1 +1,1 @@
-python psad_test_sg_3_acc_2_sgerg_rxOnly.py com65
+python psad_test_sg_3_acc_2_sgerg_rxOnly.py com108

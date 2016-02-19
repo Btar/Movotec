@@ -22,7 +22,7 @@ if len(sys.argv) < 2:
 else:
    ser = serial.Serial(sys.argv[1], 460800)
    ser.flushInput()
-   time.sleep(2)   
+   #time.sleep(2)   
    print "port opening, done."
    ser.write(struct.pack('B', 0x08))
    wait_for_ack()

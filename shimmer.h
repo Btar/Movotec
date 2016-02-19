@@ -49,7 +49,7 @@
 #define FW_IDENTIFIER   8     //Two byte firmware identifier number
 #define FW_VER_MAJOR    0     //Major version number: 0-65535
 #define FW_VER_MINOR    0     //Minor version number: 0-255
-#define FW_VER_REL      26     //Release candidate version number: 0-255
+#define FW_VER_REL      27     //Release candidate version number: 0-255
 
 
 // Packet Types

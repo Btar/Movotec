@@ -726,7 +726,7 @@ void PSAD_setDefaultConfig(void){
 
    psadConfig[NV_SG_REG0] = 0x03;
    psadConfig[NV_SG_REG1] = 0xd0;
-   psadConfig[NV_SG_REG2] = 0x00;
+   psadConfig[NV_SG_REG2] = 0x40;
    psadConfig[NV_SG_REG3] = 0x00;
 
    //#      |7    |6       |5       |4    |3  2  1  0
@@ -1183,6 +1183,9 @@ void ProcessCommand(void) {
 	  psadConfig[NV_SG_REG2] = args[2];
 	  psadConfig[NV_SG_REG3] = args[3];
 	  InfoMem_write((uint8_t*)(NV_SG_REG0), (psadConfig+NV_SG_REG0), 4);
+     psadConfig[NV_CONFIG_2] &= 0xf8;
+     psadConfig[NV_CONFIG_2] |= (args[0]>>1)&0x07;
+     InfoMem_write((uint8_t*)(NV_CONFIG_2), (psadConfig+NV_CONFIG_2), 1);
       break;
    case BT_GET_A1_CFG:
       a1CfgRsp = 1;
