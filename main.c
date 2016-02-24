@@ -101,6 +101,10 @@ inline uint8_t IsLedSet(void);
 inline void MonitorChargeStatus(void);
 inline void MonitorChargeStatusStop(void);
 inline void SetChargeStatusLeds(void);
+uint8_t DataBufInQ();
+void DataBufResetQ();
+void DataBufInInc();
+void DataBufOutInc();
 
 //void SgReadData();
 void ReadBatt();
@@ -130,6 +134,9 @@ uint8_t btMac[12], fwInfo[7], battVal[3];
 #define BATT_HIGH       0
 //#define BATT_MID        1
 #define BATT_LOW        2
+#define BATT_NO_POWER      0
+#define BATT_CHARGING      1
+#define BATT_CHARGE_DONE   2
 
 char *dierecord;
 
@@ -149,7 +156,7 @@ uint8_t dataBuffStrainRaw[12];
 uint8_t ptrEMG, ptrAccel1X, ptrGyroX, ptrStrain, ptrStatus, ptrIdStamp;//ptrAccel2X,
 uint8_t dataLen, statusReg, cpuIsSleeping, enterStandby, exitStandby;//, sgGoOn
 uint16_t dataBuffTimer, dataBuffCurrent;
-uint8_t sgReadDataCnt;
+uint8_t sgReadDataCnt, dataBuf[DATA_PACKET_BUF_SIZE][DATA_PACKET_SIZE], dataBufInPtr, dataBufOutPtr;;
 
 uint8_t* i2cBicOnExit;
 uint8_t DMA0BicOnExit;
@@ -330,6 +337,8 @@ void Init(void) {
    sw2LastRelease = 0;
 
    //sgGoOn = 0;
+   dataBufInPtr = dataBufOutPtr = 0;
+   memset(dataBuf,0,DATA_PACKET_SIZE*DATA_PACKET_BUF_SIZE);
    vibStatus = 0;
    sw1New = sw2New = vibNew = 0;
    sw1Cnt = sw2Cnt = vibCnt = 0;
@@ -474,6 +483,7 @@ inline void StartStreaming(void) {
    if(!sensing) {
 
       dataBuffTimer = 0;
+      dataBufInPtr = dataBufOutPtr = 0;
 
       if(cfgGyroEn || cfgAccelEn){
          MPU9150_init(0);
@@ -583,6 +593,7 @@ inline void StopStreaming(void) {
       //   BlinkTimerStop();
       //preSampleMpuMag = 0;
       //preSampleBmpPress = 0;
+      DataBufResetQ();
    }
 }
 
@@ -726,7 +737,7 @@ void PSAD_setDefaultConfig(void){
 
    psadConfig[NV_SG_REG0] = 0x03;
    psadConfig[NV_SG_REG1] = 0xd0;
-   psadConfig[NV_SG_REG2] = 0x40;
+   psadConfig[NV_SG_REG2] = 0x00;
    psadConfig[NV_SG_REG3] = 0x00;
 
    //#      |7    |6       |5       |4    |3  2  1  0
@@ -1602,13 +1613,13 @@ __interrupt void Port2_ISR(void) {
       break;
 
    case P2IV_P2IFG7:
-      if(P2IN & BIT7) {
+      /*if(P2IN & BIT7) {
          P2IES |= BIT7;    //look for falling edge
          BT_rtsInterrupt(1);
       } else {
          P2IES &= ~BIT7;   //look for rising edge
          BT_rtsInterrupt(0);
-      }
+      }*/
       break;
    // Default case
    default: break;
@@ -1703,9 +1714,27 @@ inline void MonitorChargeStatusStop(void) {
    //Board_ledOff(LED_RED + LED_YELLOW0 + LED_GREEN0);
 }
 
-#define BATT_NO_POWER      0
-#define BATT_CHARGING      1
-#define BATT_CHARGE_DONE   2
+
+uint8_t DataBufInQ(){
+   return (dataBufInPtr + DATA_PACKET_BUF_SIZE - dataBufOutPtr) % DATA_PACKET_BUF_SIZE;
+}
+
+void DataBufResetQ(){
+   if(!dataBufInPtr)
+      dataBufOutPtr = DATA_PACKET_BUF_SIZE - 1;
+   else
+      dataBufOutPtr = dataBufInPtr-1;
+}
+
+void DataBufInInc(){
+   if(DataBufInQ()<19)
+      if(++dataBufInPtr >= DATA_PACKET_BUF_SIZE)
+         dataBufInPtr = 0;
+}
+void DataBufOutInc(){
+   if(++dataBufOutPtr >= DATA_PACKET_BUF_SIZE)
+      dataBufOutPtr = 0;
+}
 
 
 inline void SetChargeStatusLeds(void) {

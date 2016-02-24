@@ -49,7 +49,7 @@
 #define FW_IDENTIFIER   8     //Two byte firmware identifier number
 #define FW_VER_MAJOR    0     //Major version number: 0-65535
 #define FW_VER_MINOR    0     //Minor version number: 0-255
-#define FW_VER_REL      27     //Release candidate version number: 0-255
+#define FW_VER_REL      28     //Release candidate version number: 0-255
 
 
 // Packet Types
@@ -221,6 +221,7 @@
                                        //BMP180TEMP + BMP180PRESS + batteryVoltage + 
                                        //3xexternalADC + 4xinternalADC
 #define DATA_PACKET_SIZE         40    //36 necessary. use 40 in developing
+#define DATA_PACKET_BUF_SIZE     50
 
 
 
