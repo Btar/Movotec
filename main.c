@@ -54,6 +54,7 @@
 
 //TODO: figure out why first sample after starting streaming is sometimes incorrect when using DMA with the ADC
 
+#include <ctype.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include "msp430.h"
@@ -134,9 +135,10 @@ uint8_t btMac[12], fwInfo[7], battVal[3];
 #define BATT_HIGH       0
 //#define BATT_MID        1
 #define BATT_LOW        2
-#define BATT_NO_POWER      0
-#define BATT_CHARGING      1
-#define BATT_CHARGE_DONE   2
+#define BATT_CHARGING      0
+#define BATT_CHARGE_DONE   1
+#define BATT_NO_POWER      2
+#define BATT_BAD           3
 
 char *dierecord;
 
@@ -152,7 +154,7 @@ uint8_t dataLen, cfgEmgCnt, cfgAccelCnt, cfgGyroCnt, cfgStrainCnt, cfgAccelRange
 uint8_t dataBuffEmg[7], dataBuffAccel[12], dataBuffAccelTemp[6], dataBuffGyro[6], dataBuffGyroZTemp[2],
         dataBuffStrain[8], sw1Status, sw2Status, vibStatus, sw1New, sw2New, vibNew, sw1Cnt, sw2Cnt, vibCnt;// vbatt: val_l + val_h + stat
 //long dataBuffStrainRaw[4];
-uint8_t dataBuffStrainRaw[12];
+uint8_t dataBuffStrainRaw[12], btName[NV_BT_NAME_LEN+1];
 uint8_t ptrEMG, ptrAccel1X, ptrGyroX, ptrStrain, ptrStatus, ptrIdStamp;//ptrAccel2X,
 uint8_t dataLen, statusReg, cpuIsSleeping, enterStandby, exitStandby;//, sgGoOn
 uint16_t dataBuffTimer, dataBuffCurrent;
@@ -161,9 +163,6 @@ uint8_t sgReadDataCnt, dataBuf[DATA_PACKET_BUF_SIZE][DATA_PACKET_SIZE], dataBufI
 uint8_t* i2cBicOnExit;
 uint8_t DMA0BicOnExit;
 
-#define BATT_NO_POWER      0
-#define BATT_CHARGING      1
-#define BATT_CHARGE_DONE   2
 uint8_t chargStatus;
 
 void EnterStandby(void);
@@ -188,19 +187,6 @@ void main(void) {
    //uint8_t digi_offset;
 
    Init();
-
-   dierecord = (char *)0x01A0A;
-
-   uint8_t allff[NV_CONFIG_LEN];
-   memset(allff,0xff,NV_CONFIG_LEN);
-   InfoMem_read((uint8_t *)0, psadConfig, NV_CONFIG_LEN);
-   //if(psadConfig[NV_CONFIG_0] == 0xFF){
-   if(!memcmp(psadConfig, allff, NV_CONFIG_LEN)){
-      PSAD_setDefaultConfig();
-   }
-   //PSAD_setDefaultConfig(); // todo: remove this line
-
-   BT_setTempBaudRate("921K");
 
    //ConfigureChannels();
 
@@ -411,11 +397,31 @@ void Init(void) {
    BT_setStreamDataStatus(&streamData);
    BT_setCPUSleepStatus(&cpuIsSleeping);
 
+   uint8_t allff[NV_CONFIG_LEN];
+   memset(allff,0xff,NV_CONFIG_LEN);
+   InfoMem_read((uint8_t *)0, psadConfig, NV_CONFIG_LEN);
+   //if(psadConfig[NV_CONFIG_0] == 0xFF){
+   if(!memcmp(psadConfig, allff, NV_CONFIG_LEN)){
+      PSAD_setDefaultConfig();
+   }
+
+   uint8_t i;
+   for(i=0; (i<NV_BT_NAME_LEN-1)&&isprint(psadConfig[NV_BT_NAME+i]) ; i++);
+   if(i){
+      memcpy((char*)btName, (char*)(psadConfig+NV_BT_NAME), i);
+      btName[i] = 0;
+   }else{
+      strcpy((char*)btName, "PSAD 1");
+      strcpy((char*)(psadConfig+NV_BT_NAME), "PSAD 1");
+      InfoMem_write((void*)NV_BT_NAME, psadConfig+NV_BT_NAME, NV_BT_NAME_LEN);
+   }
+
    //if((*BT_streamData && *BT_cpuIsSleeping) || *BT_i2c_bic_on_exit || *BT_DMA0_bic_on_exit)
 //   uint8_t bt_started = 0;
    while(!btIsPowerOn){
 	   BT_init();
 	   BT_disableRemoteConfig(1);
+	   BT_setFriendlyName((char*)btName);
 	   BT_setRadioMode(SLAVE_MODE);
 	   if(P1IN & BIT0){//if connected, turn off and back on again
 		  btIsConnected = 0;               //set connect status to false
@@ -473,6 +479,13 @@ void Init(void) {
 
    StartTB0();
 
+   dierecord = (char *)0x01A0A;
+
+   //PSAD_setDefaultConfig(); // todo: remove this line
+
+   BT_setTempBaudRate("921K");
+
+
 
    Board_ledOff(LED_ALL);
 }
@@ -517,7 +530,7 @@ inline void StartStreaming(void) {
       }
       if(cfgStrainEn) {
          //sgGoOn = 1;
-         UCB1SPI_SG_init(psadConfig+NV_SG_REG0);
+         UCB1SPI_SG_init(cfgStrainGain);
          //cfgStrainGain
          //UCB1SPI_SG_SetGain(cfgStrainGain);
          UCB1SPI_SG_SendStartCommand();
@@ -683,7 +696,7 @@ void GetStrainFromSensor(uint8_t * dbuff, uint8_t len){
    UCB1SPI_SG_ReadData(dataBuffStrainRaw);
 
    uint8_t i;
-   long temp;
+   uint32_t temp;
    for(i=0;i<4;i++){
       if(len == 2){
          if(cfgSgToShift == 8){
@@ -691,11 +704,12 @@ void GetStrainFromSensor(uint8_t * dbuff, uint8_t len){
             dbuff[i*2+1] = dataBuffStrainRaw[i*3];          //msb
          }else{ // cfgSgToShift
             temp = dataBuffStrainRaw[i*3];
-            temp = temp<<8 + dataBuffStrainRaw[i*3+1];
-            temp = temp<<8 + dataBuffStrainRaw[i*3+2];
+            temp = (temp<<8) + dataBuffStrainRaw[i*3+1];
+            temp = (temp<<8) + dataBuffStrainRaw[i*3+2];
 
             dbuff[i*2+0] = (temp>>cfgSgToShift) & 0xff;        //lsb
-            dbuff[i*2+1] = (dataBuffStrainRaw[i*3] & 0x80) + ((temp>>cfgSgToShift+8) & 0x7f);//sign+msb
+            //dbuff[i*2+1] = (dataBuffStrainRaw[i*3] & 0x80) + ((temp>>cfgSgToShift+8) & 0x7f);//sign+msb
+            dbuff[i*2+1] = (temp>>(cfgSgToShift+8)) & 0xff;//sign+msb
          }
       }
       if(len == 3){
@@ -709,7 +723,7 @@ void GetStrainFromSensor(uint8_t * dbuff, uint8_t len){
 void PSAD_setDefaultConfig(void){
    psadConfig[NV_CONFIG_0] = 0x10; // sg at half speed
    psadConfig[NV_CONFIG_1] = 0x27; // AUTO_TURNOFF_EN + AUTO_STANDBY_EN + ACCEL_4g + GYRO_1000dps
-   psadConfig[NV_CONFIG_2] = 0x41; // 8bits shift, gain=2
+   psadConfig[NV_CONFIG_2] = 0x38; // 7bits shift, gain=1
 
    // default emg setting
    /*psadConfig[NV_EMG_1_CONFIG1] = 0x04;
@@ -735,14 +749,16 @@ void PSAD_setDefaultConfig(void){
    psadConfig[NV_EMG_1_RESP1] = 0x02;
    psadConfig[NV_EMG_1_RESP2] = 0x01;
 
-   psadConfig[NV_SG_REG0] = 0x03;
-   psadConfig[NV_SG_REG1] = 0xd0;
-   psadConfig[NV_SG_REG2] = 0x00;
-   psadConfig[NV_SG_REG3] = 0x00;
+//   psadConfig[NV_SG_REG0] = 0x03;
+//   psadConfig[NV_SG_REG1] = 0xd0;
+//   psadConfig[NV_SG_REG2] = 0x40;
+//   psadConfig[NV_SG_REG3] = 0x00;
+
+   strcpy(psadConfig+NV_BT_NAME, "PSAD 1");
 
    //#      |7    |6       |5       |4    |3  2  1  0
    //content|BDU  |ABW[1]  |ABW[0]  |AFDS |
-   psadConfig[NV_A1_CFG] = 0x00;
+   //psadConfig[NV_A1_CFG] = 0x00;
 
    InfoMem_write((void*)0, psadConfig, NV_CONFIG_LEN);
 
@@ -761,8 +777,8 @@ void ParseConfig(){
    cfgAutoStandby = psadConfig[NV_CONFIG_1] & 0x01;
 
    cfgSgToShift = (psadConfig[NV_CONFIG_2]>>3) & 0x0f;
-   //cfgStrainGain = psadConfig[NV_CONFIG_2] & 0x07;
-   cfgStrainGain = (psadConfig[NV_SG_REG0]>>1) & 0x07;
+   cfgStrainGain = psadConfig[NV_CONFIG_2] & 0x07;
+//   cfgStrainGain = (psadConfig[NV_SG_REG0]>>1) & 0x07;
 
    cfgAccelEn = (cfgAccelCnt == 3)?0:1;
    cfgGyroEn = (cfgGyroCnt == 3)?0:1;
@@ -947,8 +963,8 @@ uint8_t BtDataAvailable(uint8_t data) {
       case BT_GET_STATUS:
       case BT_GET_SG_BITSHIFT:
       case BT_GET_SG_GAIN:
-      case BT_GET_SG_REGS:
-      case BT_GET_A1_CFG:
+//      case BT_GET_SG_REGS:
+//      case BT_GET_A1_CFG:
          gAction = data;
          processCommand = 1;
          return 1;
@@ -963,7 +979,7 @@ uint8_t BtDataAvailable(uint8_t data) {
       case BT_SET_SG_BITSHIFT:
       case BT_SET_SG_GAIN:
       case BT_LED3_SET_USERCTRL:
-      case BT_SET_A1_CFG:
+//      case BT_SET_A1_CFG:
          waitingForArgs = 1;
          gAction = data;
          return 0;
@@ -978,10 +994,10 @@ uint8_t BtDataAvailable(uint8_t data) {
          waitingForArgs = 3;
          gAction = data;
          return 0;
-      case BT_SET_SG_REGS:
-         waitingForArgs = 4;
-         gAction = data;
-         return 0;
+//      case BT_SET_SG_REGS:
+//         waitingForArgs = 4;
+//         gAction = data;
+//         return 0;
       case BT_SET_EMG_CONFIG:
          waitingForArgs = 10;
          gAction = data;
@@ -1176,35 +1192,35 @@ void ProcessCommand(void) {
          psadConfig[NV_CONFIG_2] &= 0xf8;
          psadConfig[NV_CONFIG_2] |= args[0];
          InfoMem_write((uint8_t*)(NV_CONFIG_2), (psadConfig+NV_CONFIG_2), 1);
-         psadConfig[NV_SG_REG0] &= 0xf1;
-         psadConfig[NV_SG_REG0] |= args[0]<<1;
-         InfoMem_write((uint8_t*)(NV_SG_REG0), (psadConfig+NV_SG_REG0), 1);
+//         psadConfig[NV_SG_REG0] &= 0xf1;
+//         psadConfig[NV_SG_REG0] |= args[0]<<1;
+//         InfoMem_write((uint8_t*)(NV_SG_REG0), (psadConfig+NV_SG_REG0), 1);
       }
       // todo: find a place (4 bits) in infomem for this value
       break;
    case BT_LED3_SET_USERCTRL:
       led3UserCtrl = args[0];
       break;
-   case BT_GET_SG_REGS:
-      sgRegRsp = 1;
-      break;
-   case BT_SET_SG_REGS:
-	  psadConfig[NV_SG_REG0] = args[0];
-	  psadConfig[NV_SG_REG1] = args[1];
-	  psadConfig[NV_SG_REG2] = args[2];
-	  psadConfig[NV_SG_REG3] = args[3];
-	  InfoMem_write((uint8_t*)(NV_SG_REG0), (psadConfig+NV_SG_REG0), 4);
-     psadConfig[NV_CONFIG_2] &= 0xf8;
-     psadConfig[NV_CONFIG_2] |= (args[0]>>1)&0x07;
-     InfoMem_write((uint8_t*)(NV_CONFIG_2), (psadConfig+NV_CONFIG_2), 1);
-      break;
-   case BT_GET_A1_CFG:
-      a1CfgRsp = 1;
-      break;
-   case BT_SET_A1_CFG:
-     psadConfig[NV_A1_CFG] = args[0];
-     InfoMem_write((uint8_t*)(NV_A1_CFG), (psadConfig+NV_A1_CFG), 1);
-      break;
+//   case BT_GET_SG_REGS:
+//      sgRegRsp = 1;
+//      break;
+//   case BT_SET_SG_REGS:
+//	  psadConfig[NV_SG_REG0] = args[0];
+//	  psadConfig[NV_SG_REG1] = args[1];
+//	  psadConfig[NV_SG_REG2] = args[2];
+//	  psadConfig[NV_SG_REG3] = args[3];
+//	  InfoMem_write((uint8_t*)(NV_SG_REG0), (psadConfig+NV_SG_REG0), 4);
+//     psadConfig[NV_CONFIG_2] &= 0xf8;
+//     psadConfig[NV_CONFIG_2] |= (args[0]>>1)&0x07;
+//     InfoMem_write((uint8_t*)(NV_CONFIG_2), (psadConfig+NV_CONFIG_2), 1);
+//      break;
+//   case BT_GET_A1_CFG:
+//      a1CfgRsp = 1;
+//      break;
+//   case BT_SET_A1_CFG:
+//     psadConfig[NV_A1_CFG] = args[0];
+//     InfoMem_write((uint8_t*)(NV_A1_CFG), (psadConfig+NV_A1_CFG), 1);
+//      break;
 
    default:break;
    }
@@ -1329,25 +1345,23 @@ void SendResponse(void) {
       }
       if(sgGainRsp) {
          *(resPacket + packet_length++) = BT_RSP_SG_GAIN;
-         //*(resPacket + packet_length++) = psadConfig[NV_CONFIG_2] & 0x07;
-         *(resPacket + packet_length++) = (psadConfig[NV_SG_REG0] & 0x0E)>>1;
+         *(resPacket + packet_length++) = psadConfig[NV_CONFIG_2] & 0x07;
+//         *(resPacket + packet_length++) = (psadConfig[NV_SG_REG0] & 0x0E)>>1;
          sgGainRsp = 0;
       }
-      if(sgRegRsp) {
-         *(resPacket + packet_length++) = BT_RSP_SG_REGS;
-         *(resPacket + packet_length++) = psadConfig[NV_SG_REG0];
-         *(resPacket + packet_length++) = psadConfig[NV_SG_REG1];
-         *(resPacket + packet_length++) = psadConfig[NV_SG_REG2];
-         *(resPacket + packet_length++) = psadConfig[NV_SG_REG3];
-         sgRegRsp = 0;
-      }
-      if(a1CfgRsp) {
-         *(resPacket + packet_length++) = BT_RSP_A1_CFG;
-         *(resPacket + packet_length++) = psadConfig[NV_A1_CFG];
-         a1CfgRsp = 0;
-      }
-
-
+//      if(sgRegRsp) {
+//         *(resPacket + packet_length++) = BT_RSP_SG_REGS;
+//         *(resPacket + packet_length++) = psadConfig[NV_SG_REG0];
+//         *(resPacket + packet_length++) = psadConfig[NV_SG_REG1];
+//         *(resPacket + packet_length++) = psadConfig[NV_SG_REG2];
+//         *(resPacket + packet_length++) = psadConfig[NV_SG_REG3];
+//         sgRegRsp = 0;
+//      }
+//      if(a1CfgRsp) {
+//         *(resPacket + packet_length++) = BT_RSP_A1_CFG;
+//         *(resPacket + packet_length++) = psadConfig[NV_A1_CFG];
+//         a1CfgRsp = 0;
+//      }
    }
    //BT_write(resPacket, packet_length);
    BT_append(resPacket, packet_length);
@@ -1558,6 +1572,7 @@ __interrupt void Port2_ISR(void) {
 
    //CHG_STAT1
    case P2IV_P2IFG2:
+      //P2IFG &= ~BIT2;
       SetChargeStatusLeds();
       if(P2IN & BIT2) {
          P2IES |= BIT2;    //look for falling edge
@@ -1568,6 +1583,8 @@ __interrupt void Port2_ISR(void) {
 
    //CHG_STAT2
    case P2IV_P2IFG3:
+      //p2.3 low = charge completed
+      //p2.3 high = charging
       SetChargeStatusLeds();
       if(P2IN & BIT3) {
          P2IES |= BIT3;    //look for falling edge
@@ -1706,7 +1723,9 @@ inline void MonitorChargeStatus(void) {
 
    SetChargeStatusLeds();
 
-   P2IE |= BIT2 + BIT3; //enable interrupts
+   P2IE |= BIT2 + BIT3; //enable interrupts//
+   //p2.3 low = charge completed
+   //p2.3 high = charging
 }
 
 inline void MonitorChargeStatusStop(void) {
@@ -1740,15 +1759,28 @@ void DataBufOutInc(){
 inline void SetChargeStatusLeds(void) {
    //Board_ledOff(LED_RED + LED_YELLOW0 + LED_GREEN0);
 
-   if((P2IN&BIT2) && !(P2IN&BIT3)) {
+   //p2.3 low = charge completed
+   //p2.3 high = charging
+//   if(P2IN&BIT3) {
+//      chargStatus = BATT_CHARGING;
+//   } else{
+//      chargStatus = BATT_CHARGE_DONE;
+//   }
+
+   _NOP();
+   if((P2IN & BIT2) && !(P2IN & BIT3)) {
       //charge completed
-      //Board_ledOn(PSAD_LED_1_R);
+      //Board_ledOn(PSAD_LED_1_G);
       chargStatus = BATT_CHARGE_DONE;
    } else if(!(P2IN&BIT2) && (P2IN&BIT3)) {
       //charging
-      //Board_ledOn(PSAD_LED_1_R);
+      //Board_ledOn(PSAD_LED_1_G);
       chargStatus = BATT_CHARGING;
    } else if(!(P2IN&BIT2) &&!(P2IN&BIT3)) {
+      //bat batt
+      chargStatus = BATT_BAD;
+   } else if((P2IN&BIT2) &&(P2IN&BIT3)) {
+      //no charger connected
       chargStatus = BATT_NO_POWER;
    }
 }
@@ -1829,23 +1861,6 @@ __interrupt void TIMER0_B1_ISR(void) {
    case  8:                               // TB0CCR4
 
       TB0CCR4 += ACLK_100ms;
-//
-//      if(P6IN & BIT2) {
-//         if(!btIsConnected){
-//            btIsConnected = 1;
-//            BT_connectionInterrupt(1);
-//            waitingForArgs = 0;
-//         }
-//      } else {
-//         if(btIsConnected){
-//            btIsConnected = 0;
-//            BT_connectionInterrupt(0);
-//            if(sensing) {
-//               stopSensing = 1;
-//            }
-//            discTs = RTC_get64();
-//         }
-//      }
       ledCounter ++;
       if(ledCounter >= 20){
          ledCounter = 0;
@@ -1864,27 +1879,36 @@ __interrupt void TIMER0_B1_ISR(void) {
 
       //P1DIR &= ~BIT0;  //todo: this pin is going to be bt_status_int
 
-      //==== led_1_red + led_1_yellow
-      if(chargStatus == BATT_NO_POWER){// considered as undocked
-         Board_ledOff(PSAD_LED_1_Y);
+      //==== led_1_green + led_1_yellow
+//      if(chargStatus == BATT_NO_POWER){// considered as undocked
+//         Board_ledOff(PSAD_LED_1_Y);
+//         if(battStat == BATT_HIGH){
+//            //normal: green on
+//            Board_ledOn(PSAD_LED_1_G);
+//         }else{
+//            if(!(ledCounter%5))
+//               Board_ledOn(PSAD_LED_1_G);
+//            else
+//               Board_ledOff(PSAD_LED_1_G);
+//         }
+//      }
+//      else
+      if ((chargStatus == BATT_CHARGING) || (chargStatus == BATT_NO_POWER)){//i.e. not done
          if(battStat == BATT_HIGH){
             //normal: green on
-            Board_ledOn(PSAD_LED_1_R);
+            Board_ledOn(PSAD_LED_1_G);
          }else{
             if(!(ledCounter%5))
-               Board_ledOn(PSAD_LED_1_R);
+               Board_ledOn(PSAD_LED_1_G);
             else
-               Board_ledOff(PSAD_LED_1_R);
+               Board_ledOff(PSAD_LED_1_G);
          }
       }
-      else if (chargStatus == BATT_CHARGING){
-         if(!(ledCounter%5))
-            Board_ledOn(PSAD_LED_1_Y);
-         else
-            Board_ledOff(PSAD_LED_1_Y);
-      }
       else if (chargStatus == BATT_CHARGE_DONE){
-         Board_ledOn(PSAD_LED_1_Y);
+         Board_ledOn(PSAD_LED_1_G);
+      }
+      else{//bad battery
+         Board_ledOff(PSAD_LED_1_G);
       }
 
       //==== led_2_blue

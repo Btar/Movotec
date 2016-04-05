@@ -119,7 +119,9 @@ void Board_init(void) {
    //Make the 2 CHG_STAT pins input
    P2DIR &= ~(BIT2 + BIT3);
    P2REN |= (BIT2 + BIT3);
-   P2OUT &= ~(BIT2 + BIT3);
+   P2OUT |= (BIT2 + BIT3);
+//   P2REN |= BIT3;
+//   P2OUT |= BIT3;
 
    //SW_I2C todo: change pins
    P7OUT &= ~BIT5;           //set low
@@ -208,7 +210,7 @@ void Board_init(void) {
 
 
 void Board_ledOff(uint8_t ledMask) {
-   if (ledMask & PSAD_LED_1_R)   P8OUT |= BIT6;
+   if (ledMask & PSAD_LED_1_G)   P8OUT |= BIT6;
    if (ledMask & PSAD_LED_1_Y)   P8OUT |= BIT5;
    if (ledMask & PSAD_LED_2_B)   P8OUT |= BIT4;
    if (ledMask & PSAD_LED_3_Y)   P8OUT |= BIT3;
@@ -222,7 +224,7 @@ void Board_ledOff(uint8_t ledMask) {
  * @return none
  ******************************************************************************/
 void Board_ledOn(uint8_t ledMask) {
-   if (ledMask & PSAD_LED_1_R)   P8OUT &= ~BIT6;
+   if (ledMask & PSAD_LED_1_G)   P8OUT &= ~BIT6;
    if (ledMask & PSAD_LED_1_Y)   P8OUT &= ~BIT5;
    if (ledMask & PSAD_LED_2_B)   P8OUT &= ~BIT4;
    if (ledMask & PSAD_LED_3_Y)   P8OUT &= ~BIT3;
@@ -236,7 +238,7 @@ void Board_ledOn(uint8_t ledMask) {
  * @return none
  ******************************************************************************/
 void Board_ledToggle(uint8_t ledMask) {
-   if (ledMask & PSAD_LED_1_R)   P8OUT ^= BIT6;
+   if (ledMask & PSAD_LED_1_G)   P8OUT ^= BIT6;
    if (ledMask & PSAD_LED_1_Y)   P8OUT ^= BIT5;
    if (ledMask & PSAD_LED_2_B)   P8OUT ^= BIT4;
    if (ledMask & PSAD_LED_3_Y)   P8OUT ^= BIT3;

@@ -49,7 +49,7 @@
 #define FW_IDENTIFIER   8     //Two byte firmware identifier number
 #define FW_VER_MAJOR    0     //Major version number: 0-65535
 #define FW_VER_MINOR    0     //Minor version number: 0-255
-#define FW_VER_REL      28     //Release candidate version number: 0-255
+#define FW_VER_REL      34    //Release candidate version number: 0-255
 
 
 // Packet Types
@@ -156,14 +156,17 @@
 #define NV_EMG_1_LOFF_STAT       10
 #define NV_EMG_1_RESP1           11
 #define NV_EMG_1_RESP2           12
-#define NV_SG_REG0               13//page 39, ads1220 datasheet
-#define NV_SG_REG1               14
-#define NV_SG_REG2               15
-#define NV_SG_REG3               16
-#define NV_A1_CFG                17
+//#define NV_SG_REG0               13//page 39, ads1220 datasheet
+//#define NV_SG_REG1               14
+//#define NV_SG_REG2               15
+//#define NV_SG_REG3               16
+//#define NV_A1_CFG                17
+#define NV_BT_NAME               13
+#define NV_BT_NAME_END           19
 
-#define NV_CONFIG_LEN            (NV_A1_CFG+1)
 
+#define NV_CONFIG_LEN            (NV_BT_NAME_END+1)
+#define NV_BT_NAME_LEN           7
 
 
 //#define NV_CONFIG_0

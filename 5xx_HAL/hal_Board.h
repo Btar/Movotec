@@ -40,7 +40,7 @@
 
 #include <stdint.h>
 
-#define PSAD_LED_1_R   0x01
+#define PSAD_LED_1_G   0x01
 #define PSAD_LED_1_Y   0x02
 #define PSAD_LED_2_B   0x04
 #define PSAD_LED_3_Y   0x08

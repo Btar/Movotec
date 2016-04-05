@@ -16,7 +16,7 @@ void UCB1SPI_Init();
 
 //============================== below is strain gauge ==============================
 
-void UCB1SPI_SG_init(uint8_t *regs);
+void UCB1SPI_SG_init(uint8_t gain);
 
 //void ucb1spi_SG_SetChannel(int Mux);
 

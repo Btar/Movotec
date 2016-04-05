@@ -200,7 +200,7 @@ void ADS1220SendShutdownCommand(void);			// Place the device in powerdown mode
 
 /* Register Set Value Commands */
 //void ADS1220Config(void);
-void ADS1220Config(uint8_t* regs);
+void ADS1220Config(uint8_t gain);
 int ADS1220SetChannel(int Mux);
 int ADS1220SetGain(int Gain);
 int ADS1220SetPGABypass(int Bypass);

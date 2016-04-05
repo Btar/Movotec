@@ -48,12 +48,12 @@ void UCB1SPI_Init(){
 
 
 //============================== below is strain gauge ==============================
-void UCB1SPI_SG_init(uint8_t *regs) {
+void UCB1SPI_SG_init(uint8_t gain) {
    while(ucb1spi_busy);
 
    ucb1spi_busy = 1;
    ADS1220Init();
-   ADS1220Config(regs);
+   ADS1220Config(gain);
    //ADS1220SendStartCommand();
    ucb1spi_busy = 0;
 }

@@ -102,7 +102,7 @@ void ADS1220Init(void)
 }
 
 // ADS1220 Initial Configuration
-void ADS1220Config(uint8_t* regs)
+void ADS1220Config(uint8_t gain)
 {
 	unsigned Temp;
 	
@@ -110,8 +110,13 @@ void ADS1220Config(uint8_t* regs)
    
 	// clear prev value;
    //Temp = 0x00;
-   Temp = regs[0];
 
+	//   psadConfig[NV_SG_REG0] = 0x03;
+	//   psadConfig[NV_SG_REG1] = 0xd0;
+	//   psadConfig[NV_SG_REG2] = 0x40;
+	//   psadConfig[NV_SG_REG3] = 0x00;
+
+   Temp = 0x01 | (gain<<1);
    // write the register value containing the new value back to the ADS
    ADS1220WriteRegister(ADS1220_0_REGISTER, 0x01, &Temp);
    _delay_cycles(24000);
@@ -123,17 +128,17 @@ void ADS1220Config(uint8_t* regs)
 
 
    //Temp = ADS1220_MODE_TURBO + ADS1220_DR_1000;    // Set default start mode to 2000sps + turbo mode + single sample
-   Temp = regs[1];
+   Temp = 0xd0;
    
 	// write the register value containing the new value back to the ADS
    ADS1220WriteRegister(ADS1220_1_REGISTER, 0x01, &Temp);
    _delay_cycles(24000);
 
-   Temp = regs[2];
+   Temp = 0x40;
    ADS1220WriteRegister(ADS1220_2_REGISTER, 0x01, &Temp);
    _delay_cycles(24000);
 
-   Temp = regs[3];
+   Temp = 0x00;
    ADS1220WriteRegister(ADS1220_3_REGISTER, 0x01, &Temp);
    _delay_cycles(24000);
 
